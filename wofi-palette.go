@@ -20,11 +20,35 @@ type FormattedConfig struct {
 }
 
 func main() {
-	filename := "config.json"
-	settings, err := readConfig(filename)
+	homeFolder, homeFolderExists := os.LookupEnv("HOME")
+	configFolder := homeFolder + "/.config/immaculate-wofi/"
+	configFile := configFolder + "wofi-palette.json"
 
-	fmt.Println(settings)
-	fmt.Println(err)
+	if !homeFolderExists {
+		log.Fatal("HOME environment variable not set")
+	}
+
+	if _, err := os.Stat(configFolder); os.IsNotExist(err) {
+		err := os.MkdirAll(configFolder, 0755)
+		if err != nil {
+			log.Fatal("Error creating directory:", err)
+		}
+	}
+
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		warning := fmt.Sprintf(`{"paths": [["Add your paths in %s", "echo hi"]]}`, configFile)
+		err := os.WriteFile(configFile, []byte(warning), 0755)
+
+		if err != nil {
+			log.Fatal("Error creating config file:", err)
+		}
+	}
+
+	settings, err := readConfig(configFile)
+
+	if err != nil {
+		log.Fatalf("Error reading config file: %v", err)
+	}
 
 	var options []FormattedConfig
 
@@ -61,27 +85,12 @@ func main() {
 
 	woficmd.Stdin = bytes.NewBufferString(optionsString)
 
-	option := runCommand(woficmd)
+	selectedOption := strings.TrimSpace(runCommand(woficmd))
 
-	cleanOption := strings.TrimSpace(option)
-
-	var powercmd *exec.Cmd
-
-	switch cleanOption {
-	case "Shutdown":
-		powercmd = exec.Command("systemctl", "shutdown")
-	case "Reboot":
-		powercmd = exec.Command("systemctl", "reboot")
-	case "Suspend":
-		powercmd = exec.Command("systemctl", "suspend")
-	case "Logout":
-		powercmd = exec.Command("loginctl", "terminate-user", os.Getenv("USER"))
-	case "Lock":
-		powercmd = exec.Command("hyprlock")
-	}
-
-	if powercmd != nil {
-		runCommand(powercmd)
+	for _, option := range options {
+		if option.Name == selectedOption && option.Command != nil {
+			runCommand(option.Command)
+		}
 	}
 
 }
