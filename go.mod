@@ -1,3 +1,3 @@
-module wofi-power
+module wofi-palette
 
 go 1.24
